@@ -54,8 +54,8 @@ def main(file_path):
                 'max_temp': int(row['MaxTemp'])
             })
     
-    with open(file_path, "w", newline='', encoding='utf-8') as csv_file:
-        writer = csv.writer(csv_file)
+    with open(file_path, "w", newline='', encoding='utf-8') as data_file:
+        writer = csv.writer(data_file)
         writer.writerow([
             "Places",
             "Temperature",
@@ -66,7 +66,7 @@ def main(file_path):
         ])
         last_update = time.monotonic()
         prev_len = 0
-        while csv_file.tell() < FILE_SIZE:
+        while data_file.tell() < FILE_SIZE:
             # Температура
             temp = round(random.uniform(MIN_TEMP, MAX_TEMP), 2)
             # Риск огня
@@ -93,7 +93,7 @@ def main(file_path):
             now = time.monotonic()
             if __name__ == '__main__' and now - \
                 last_update >= TEXT_UPDATE_INTERVAL:
-                text = next(SPINNER) + " " + str(round(csv_file.tell() / \
+                text = next(SPINNER) + " " + str(round(data_file.tell() / \
                     (1024 ** 2), 1)) + " МБ"
                 print(f'\r{text:<{prev_len}}', end='', flush=True)
                 last_update = now
