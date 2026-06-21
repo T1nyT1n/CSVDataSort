@@ -1,2 +1,6 @@
+# Python
 __pycache__/
+
+# Generated data
 data.csv
+temp/
