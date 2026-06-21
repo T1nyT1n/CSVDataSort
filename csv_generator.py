@@ -92,7 +92,8 @@ def main(file_path):
             
             now = time.monotonic()
             if now - last_update >= TEXT_UPDATE_INTERVAL:
-                text = next(SPINNER) + " " + str(round(csv_file.tell() / (1024 ** 2), 1)) + " МБ"
+                text = next(SPINNER) + " " + str(round(csv_file.tell() / \
+                    (1024 ** 2), 1)) + " МБ"
                 print(f'\r{text:<{prev_len}}', end='', flush=True)
                 last_update = now
             
