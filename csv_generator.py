@@ -8,7 +8,7 @@ from itertools import cycle
 
 # КОНФИГ
 
-FILE_SIZE = 1 * (1024 ** 3)
+FILE_SIZE = 0.1 * (1024 ** 3)
 TEXT_UPDATE_INTERVAL = 0.5 # секунд
 SPINNER = cycle([ "-", "\\", "|", "/"])
 
@@ -40,11 +40,11 @@ def path_from_args():
     return file_path
 
 def main(file_path):
-    with open(PLACES_FILE, 'r', newline='') as val_file:
+    with open(PLACES_FILE, 'r', newline='', encoding='utf-8') as val_file:
         reader = csv.reader(val_file)
         places = [row[0] for row in reader]
         
-    with open(CONDITIONS_FILE, 'r', newline='') as cond_file:
+    with open(CONDITIONS_FILE, 'r', newline='', encoding='utf-8') as cond_file:
         reader = csv.DictReader(cond_file)
         conditions = []
         for row in reader:
@@ -54,7 +54,7 @@ def main(file_path):
                 'max_temp': int(row['MaxTemp'])
             })
     
-    with open(file_path, "w", newline='') as csv_file:
+    with open(file_path, "w", newline='', encoding='utf-8') as csv_file:
         writer = csv.writer(csv_file)
         writer.writerow([
             "Places",
@@ -91,7 +91,8 @@ def main(file_path):
             ])
             
             now = time.monotonic()
-            if now - last_update >= TEXT_UPDATE_INTERVAL:
+            if __name__ == '__main__' and now - \
+                last_update >= TEXT_UPDATE_INTERVAL:
                 text = next(SPINNER) + " " + str(round(csv_file.tell() / \
                     (1024 ** 2), 1)) + " МБ"
                 print(f'\r{text:<{prev_len}}', end='', flush=True)
