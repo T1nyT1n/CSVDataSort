@@ -3,4 +3,5 @@ __pycache__/
 
 # Generated data
 data.csv
+sorted_data.csv
 temp/

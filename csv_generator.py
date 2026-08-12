@@ -1,10 +1,11 @@
 import csv
-import sys # Для аргументов командной строки
-import pathlib # Для выбора пути
+import sys
+import pathlib
 import re
 import random
 import time
 from itertools import cycle
+from utils import *
 
 # КОНФИГ
 
@@ -12,8 +13,8 @@ FILE_SIZE = 0.1 * (1024 ** 3)
 TEXT_UPDATE_INTERVAL = 0.5 # секунд
 SPINNER = cycle([ "-", "\\", "|", "/"])
 
-PLACES_FILE = "gen/places.csv"
-CONDITIONS_FILE = "gen/conditions.csv"
+PLACES_FILE = Path('gen/places.csv')
+CONDITIONS_FILE = Path('gen/conditions.csv')
 MIN_TEMP = -45.0
 MAX_TEMP = 40.0
 MIN_HUMIDITY = 0.0
@@ -40,11 +41,11 @@ def path_from_args():
     return file_path
 
 def main(file_path):
-    with open(PLACES_FILE, 'r', newline='', encoding='utf-8') as val_file:
+    with open_utf8(PLACES_FILE, 'r') as val_file:
         reader = csv.reader(val_file)
         places = [row[0] for row in reader]
         
-    with open(CONDITIONS_FILE, 'r', newline='', encoding='utf-8') as cond_file:
+    with open_utf8(CONDITIONS_FILE, 'r') as cond_file:
         reader = csv.DictReader(cond_file)
         conditions = []
         for row in reader:
@@ -54,7 +55,7 @@ def main(file_path):
                 'max_temp': int(row['MaxTemp'])
             })
     
-    with open(file_path, "w", newline='', encoding='utf-8') as data_file:
+    with open_utf8(file_path, "w") as data_file:
         writer = csv.writer(data_file)
         writer.writerow([
             "Places",
