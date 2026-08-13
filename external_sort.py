@@ -5,6 +5,7 @@ import logger as log
 from pathlib import Path
 from collections.abc import Iterator
 from contextlib import ExitStack
+from utils import *
 
 # Максимальный размер чанка.
 # 1024 ** 3 байт в гигабайте.
@@ -14,9 +15,6 @@ if config.auto_detect_ram == True:
     pass
 else:
     max_chunk_size = 0.01 * (1024 ** 3)
-
-def open_utf8(path: Path, mode: str):
-    return open(path, mode, newline='', encoding='utf-8')
 
 def start() -> int:
     # Шаг 1: РАЗДЕЛЕНИЕ. Разделяем внешние данные на чанки и сортируем каждый в
