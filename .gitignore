@@ -5,3 +5,10 @@ __pycache__/
 data.csv
 sorted_data.csv
 temp/
+
+# Build
+build/
+
+# Tools
+.clangd
+CMake*
