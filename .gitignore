@@ -6,9 +6,9 @@ data.csv
 sorted_data.csv
 temp/
 
-# Build
-build/
+# Binaries
+external_sort.dll
+external_sort.so
 
 # Tools
-.clangd
-CMake*
+compile_flags.txt
