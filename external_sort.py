@@ -20,25 +20,43 @@ def detect_column_type(value):
     stripped_value = value.strip()
     low = stripped_value.lower()
     if low in {'true','false'}:
+        log.success('Столбец содержит bool.')
         return bool(value)
+    log.error('Столбец не содержит bool.')
     
     # FLOAT
     try:
         x = float(value)
         if math.isfinite(x):
+            log.success('Столбец содержит float.')
             return x
     except ValueError:
+        log.error('Столбец не содержит float.')
         pass
 
     # INT
     try:
         x = int(value)
+        log.success('Столбец содержит int.')
         return x
     except ValueError:
+        log.error('Столбец не содержит int.')
         pass
 
     # STR
     return str(value)
+
+def write_sorted_chunk(chunk, num, key):
+    """
+    Sort list and write it to the file.
+    """
+    chunk_path : Path = Path(f'temp/chunk{num}.csv')
+    chunk = sorted(chunk, key=key)
+    # Убедиться, что папка существует.
+    chunk_path.parent.mkdir(parents=True, exist_ok=True)
+    with open_utf8(chunk_path, 'w+') as chunk_file:
+        writer = csv.writer(chunk_file)
+        writer.writerows(chunk)
 
 def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
     """
@@ -57,17 +75,24 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
                 writer = csv.writer(sorted_data_file)
                 header = next(reader)
                 writer.writerow(header)
+                log.success('Записан заголовок итогового файла.')
 
             row = next(reader)
-            column_type = detect_column_type(row[header.index(key)])
-            if column_type is int:
-                type_func = lambda value: int(value)
-            elif column_type is float:
-                type_func = lambda value: float(value)
-            elif column_type is bool:
+            sample_value = detect_column_type(row[header.index(key)])
+            if isinstance(sample_value, bool):
+                log.log('Выбран bool() для приведения типов.')
                 type_func = lambda value: bool(value)
+            elif isinstance(sample_value, int):
+                log.log('Выбран int() для приведения типов.')
+                type_func = lambda value: int(value)
+            elif isinstance(sample_value, float):
+                log.log('Выбран float() для приведения типов.')
+                type_func = lambda value: float(value)
             else:
+                log.log('Выбран str() для приведения типов.')
                 type_func = lambda value: str(value)
+            
+            sorting_key = lambda row: type_func(row[header.index(key)])
             
     except FileNotFoundError:
         log.error(('Файл для сортировки не найден. Используйте '
@@ -81,49 +106,51 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
         file_chunks_amount = 0
         chunk = []
         current_size = 0
+
+        next(reader) # Skip header.
         
         for row in reader:
             chunk.append(row)
             current_size += sys.getsizeof(row)
             if current_size >= max_chunk_size:
-                chunk_path : Path = Path((f'temp/chunk{file_chunks_amount}'
-                                           '.csv'))
-                sorting_key = lambda row: type_func(row[header.index(key)])
-                chunk = sorted(chunk, key=sorting_key)
-                # Убедиться, что папка существует.
-                chunk_path.parent.mkdir(parents=True, exist_ok=True)
-                with open_utf8(chunk_path, 'w+') as chunk_file:
-                    writer = csv.writer(chunk_file)
-                    writer.writerows(chunk)
+                write_sorted_chunk(chunk, file_chunks_amount, sorting_key)
                 chunk = []
                 current_size = 0
                 file_chunks_amount += 1
                 log.log(f'Создан чанк: {file_chunks_amount}.')
+
+        write_sorted_chunk(chunk, file_chunks_amount, sorting_key)
+        file_chunks_amount += 1
+        log.log(f'Создан чанк: {file_chunks_amount}.')
     
     # Шаг 2: СЛИЯНИЕ. Открываем несколько чанков за раз и записываем
     # первый хороший вариант.
     with ExitStack() as stack:
-        chunks_file_objects = []
+        out_file = stack.enter_context(open_utf8(sorted_data_path, 'a'))
+        out_writer = csv.writer(out_file)
+        chunks_file_readers = []
         for chunk_num in range(file_chunks_amount):
             file_path = Path(f'temp/chunk{chunk_num}.csv')
             file = stack.enter_context(open_utf8(file_path, 'r'))
-            chunks_file_objects.append(file)
+            chunks_file_readers.append(csv.reader(file))
             log.log(f'Открыт файл {str(file_path)}.')
 
-        while chunks_file_objects != []:
-            first_lines = []
-            for chunk in chunks_file_objects:
-                chunk_reader = csv.reader(chunk)
-                try:
-                    cur_line = next(chunk_reader)
-                except StopIteration:
-                    chunks_file_objects.remove(chunk)
-                else:
-                    first_lines.append(cur_line)
-            first_lines = sorted(first_lines, key=sorting_key)
-            if first_lines != []:
-                open_utf8(sorted_data_path, 'a').write(
-                        ','.join(first_lines[0]) + '\n')
+        first_lines = []
+        for chunk in chunks_file_readers:
+            try:
+                cur_line = next(chunk)
+            except StopIteration:
+                chunks_file_readers.remove(chunk)
+                log.log('Один из файлов закрыт.')
+            else:
+                first_lines.append(cur_line)
+
+        first_lines = sorted(first_lines, key=sorting_key)
+        while first_lines != []:
+            out_writer.writerow(first_lines[0])
+            first_lines.pop(0)
+
+    log.success('Сортировка завершена!')
 
     # Удаляем чанки так как они больше не нужны.
     for chunk_num in range(file_chunks_amount):
