@@ -2,7 +2,9 @@
 #include <fstream>
 #include <ostream>
 #include <string>
-#include <windows.h>
+#if defined (_WIN32)
+    #include <windows.h>
+#endif
 
 #define DEFAULT_MAX_CHUNK_SIZE 10737419
 
@@ -14,7 +16,9 @@ extern "C" int start(
     const char* char_sorted_file_path,
     size_t sorted_file_path_len
 ) {
-    SetConsoleOutputCP(CP_UTF8);
+    #if defined (_WIN32)
+        SetConsoleOutputCP(CP_UTF8);
+    #endif
     
     std::string key(char_key, key_len);
     std::string data_file_path(char_data_file_path, data_file_path_len);
@@ -36,6 +40,7 @@ extern "C" int start(
     std::getline(data_file, line);
     sorted_data_file << line << std::endl;
 
+    // Close the files.
     data_file.close();
     sorted_data_file.close();
     
