@@ -7,10 +7,15 @@ from collections.abc import Iterator
 from contextlib import ExitStack
 from utils import *
 
-# 1024 ** 3 байт в гигабайте.
-# TODO: автоматизировать вычисление максимального размера чанка на
-# основе количества доступной ОЗУ.
+# 1024 ** 3 bytes in one gigabyte.
 max_chunk_size = 0.01 * (1024 ** 3)
+
+def convert_string_into_bool(value):
+    value = value.lower()
+    if value == 'true':
+        return True
+    else:
+        return False
 
 def detect_column_type(value):
     """
@@ -20,27 +25,30 @@ def detect_column_type(value):
     stripped_value = value.strip()
     low = stripped_value.lower()
     if low in {'true','false'}:
-        log.success('Столбец содержит bool.')
-        return bool(value)
-    log.error('Столбец не содержит bool.')
+        log.log('Столбец содержит bool.')
+        if low == 'true':
+            return True
+        else:
+            return False
+    log.log('Столбец не содержит bool.')
     
+    # INT
+    try:
+        x = int(value)
+        log.log('Столбец содержит int.')
+        return x
+    except ValueError:
+        log.log('Столбец не содержит int.')
+        pass
+
     # FLOAT
     try:
         x = float(value)
         if math.isfinite(x):
-            log.success('Столбец содержит float.')
+            log.log('Столбец содержит float.')
             return x
     except ValueError:
-        log.error('Столбец не содержит float.')
-        pass
-
-    # INT
-    try:
-        x = int(value)
-        log.success('Столбец содержит int.')
-        return x
-    except ValueError:
-        log.error('Столбец не содержит int.')
+        log.log('Столбец не содержит float.')
         pass
 
     # STR
@@ -52,7 +60,6 @@ def write_sorted_chunk(chunk, num, key):
     """
     chunk_path : Path = Path(f'temp/chunk{num}.csv')
     chunk = sorted(chunk, key=key)
-    # Убедиться, что папка существует.
     chunk_path.parent.mkdir(parents=True, exist_ok=True)
     with open_utf8(chunk_path, 'w+') as chunk_file:
         writer = csv.writer(chunk_file)
@@ -62,27 +69,26 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
     """
     Start external sorting.
     """
-    # Шаг 0: ПОЛУЧИТЬ КЛЮЧ СОРТИРОВКИ. Для того, чтобы сортировать по
-    # столбцу нужно знать, какой тип данных лежит в этом столбце.
+    # Step 0: get the sorting key.
 
     try:
         with open_utf8(data_path, 'r') as data_file:
             reader = csv.reader(data_file)
             
-            # Записать заголовок CSV файла, а за одним ещё и
-            # truncate-нуть его за счёт режима 'w'.
+            # Write file header to sorted data file and truncate that
+            # file.
             with open_utf8(sorted_data_path, 'w') as sorted_data_file:
                 writer = csv.writer(sorted_data_file)
                 header = next(reader)
                 writer.writerow(header)
-                log.success('Записан заголовок итогового файла.')
+                log.log('Записан заголовок итогового файла.')
 
             row = next(reader)
             row_index = header.index(key)
             sample_value = detect_column_type(row[row_index])
             if isinstance(sample_value, bool):
                 log.log('Выбран bool() для приведения типов.')
-                type_func = lambda value: bool(value)
+                type_func = lambda value: convert_string_into_bool(value)
             elif isinstance(sample_value, int):
                 log.log('Выбран int() для приведения типов.')
                 type_func = lambda value: int(value)
@@ -100,8 +106,7 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
                    '\033[92mcsv_generator\033[0m.'))
         return 2
     
-    # Шаг 1: РАЗДЕЛЕНИЕ. Разделяем внешние данные на чанки и сортируем
-    # каждый в отдельности.
+    # Step 1: SPLIT data into chunks.
     with open_utf8(data_path, 'r') as data_file:
         reader = csv.reader(data_file)
         file_chunks_amount = 0
@@ -109,6 +114,8 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
         current_size = 0
 
         next(reader) # Skip header.
+
+        log.log(f'Идёт создание чанков...')
         
         for row in reader:
             chunk.append(row)
@@ -118,14 +125,13 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
                 chunk = []
                 current_size = 0
                 file_chunks_amount += 1
-                log.log(f'Создан чанк: {file_chunks_amount}.')
 
         write_sorted_chunk(chunk, file_chunks_amount, sorting_key)
         file_chunks_amount += 1
-        log.log(f'Создан чанк: {file_chunks_amount}.')
+
+        log.log(f'Чанков создано: {file_chunks_amount}')
     
-    # Шаг 2: СЛИЯНИЕ. Открываем несколько чанков за раз и записываем
-    # первый хороший вариант.
+    # Step 2: MERGE data from chunks to the final file.
     with ExitStack() as stack:
 
         # Create new sorting key
@@ -141,40 +147,39 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
             file_path = Path(f'temp/chunk{chunk_num}.csv')
             file = stack.enter_context(open_utf8(file_path, 'r'))
             chunks_file_readers.append(csv.reader(file))
-            log.log(f'Открыт файл {str(file_path)}.')
 
+        log.log(f'Файлов открыто: {len(chunks_file_readers)}')
+        log.log(f'Идёт слияние чанков...')
+
+        # Read first lines from every chunk
         first_lines = []
         for chunk in chunks_file_readers:
             try:
                 cur_line = next(chunk)
             except StopIteration:
                 chunks_file_readers.remove(chunk)
-                log.log('Один из файлов закрыт.')
             else:
                 first_lines.append( (chunk, cur_line) )
-
-        first_lines = sorted(first_lines, key=sorting_key)
-        out_writer.writerow(first_lines[0][1])
-        while chunks_file_readers != []:
-            cur_reader = first_lines[0][0]
+        
+        # Write the first line and get a new one
+        first_lines.sort(key=sorting_key)
+        while chunks_file_readers:
+            cur_reader, cur_line = first_lines.pop(0)
+            out_writer.writerow(cur_line)
             try:
                 first_lines.append((cur_reader, next(cur_reader)))
+                first_lines.sort(key=sorting_key)
             except StopIteration:
                 chunks_file_readers.remove(cur_reader)
-                first_lines.pop(0)
-                log.log('Один из файлов закрыт.')
-            else:
-                first_lines.pop(0)
-                first_lines = sorted(first_lines, key=sorting_key)
-                out_writer.writerow(first_lines[0][1])
 
     log.success('Сортировка завершена!')
 
-    # Удаляем чанки так как они больше не нужны.
+    # Delete chunks because they're no longer needed
     for chunk_num in range(file_chunks_amount):
         chunk_path = Path(f'temp/chunk{chunk_num}.csv')
         chunk_path.unlink(missing_ok = True)
-        log.log(f'Удалён файл {str(chunk_path)}.')
+    
+    log.log(f'Чанки удалены.')
 
     return 1
 
