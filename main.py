@@ -75,11 +75,17 @@ def main() -> None:
                 key_bytes = args_list.key.encode('utf-8')
                 file_bytes = args_list.file.encode('utf-8')
                 output_bytes = args_list.output.encode('utf-8')
-                lib.start(
+                result = lib.start(
                     key_bytes, len(key_bytes),
                     file_bytes, len(file_bytes),
                     output_bytes, len(output_bytes),
                 )
+                if result == 1:
+                    log.error('Что-то пошло не так...');
+                elif result == 0:
+                    log.success('Работа C++ модуля успешно завершена.')
+                else:
+                    log.log('При работе C++ модуля что-то произошло.')
             elif args_list.module == 'py':
                 data_path = Path(args_list.file)
                 sorted_path = Path(args_list.output)
