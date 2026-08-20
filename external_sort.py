@@ -78,7 +78,8 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
                 log.success('Записан заголовок итогового файла.')
 
             row = next(reader)
-            sample_value = detect_column_type(row[header.index(key)])
+            row_index = header.index(key)
+            sample_value = detect_column_type(row[row_index])
             if isinstance(sample_value, bool):
                 log.log('Выбран bool() для приведения типов.')
                 type_func = lambda value: bool(value)
@@ -126,8 +127,15 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
     # Шаг 2: СЛИЯНИЕ. Открываем несколько чанков за раз и записываем
     # первый хороший вариант.
     with ExitStack() as stack:
+
+        # Create new sorting key
+        sorting_key = lambda item_tuple: type_func(item_tuple[1][row_index])
+        
+        # Open sorted file
         out_file = stack.enter_context(open_utf8(sorted_data_path, 'a'))
         out_writer = csv.writer(out_file)
+
+        # Open chunk files
         chunks_file_readers = []
         for chunk_num in range(file_chunks_amount):
             file_path = Path(f'temp/chunk{chunk_num}.csv')
@@ -143,12 +151,22 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
                 chunks_file_readers.remove(chunk)
                 log.log('Один из файлов закрыт.')
             else:
-                first_lines.append(cur_line)
+                first_lines.append( (chunk, cur_line) )
 
         first_lines = sorted(first_lines, key=sorting_key)
-        while first_lines != []:
-            out_writer.writerow(first_lines[0])
-            first_lines.pop(0)
+        out_writer.writerow(first_lines[0][1])
+        while chunks_file_readers != []:
+            cur_reader = first_lines[0][0]
+            try:
+                first_lines.append((cur_reader, next(cur_reader)))
+            except StopIteration:
+                chunks_file_readers.remove(cur_reader)
+                first_lines.pop(0)
+                log.log('Один из файлов закрыт.')
+            else:
+                first_lines.pop(0)
+                first_lines = sorted(first_lines, key=sorting_key)
+                out_writer.writerow(first_lines[0][1])
 
     log.success('Сортировка завершена!')
 
@@ -161,4 +179,4 @@ def start(key: str, data_path: Path, sorted_data_path: Path) -> int:
     return 1
 
 if __name__ == '__main__':
-    print('\033[92mexternal_sort.py\033[0m')
+    print('\033[92mexternal_sort.py\033[0m') # lol idk
